@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KPI 계기판 — 연간 목표 진척 관리</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#EFF1EC; --paper-2:#F8F9F6; --ink:#131A17; --ink-60:#5A6560; --ink-35:#9AA69C;
+  --rule:#D3DAD2; --deep:#0F5C4A; --amber:#C98418; --alert:#A83A3A; --blue:#2F5D8C;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--paper);color:var(--ink);
+  font-family:"IBM Plex Sans KR",Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  -webkit-font-smoothing:antialiased;line-height:1.5}
+.mono{font-family:"IBM Plex Mono","IBM Plex Sans KR",monospace;font-variant-numeric:tabular-nums}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:none}
+
+/* ── 로그인 ──────────────────────────────── */
+.gate{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--ink)}
+.gate .box{width:100%;max-width:400px;background:var(--paper-2);border-radius:5px;overflow:hidden}
+.gate .head{padding:22px 24px 18px;border-bottom:1px solid var(--rule)}
+.gate .head b{display:block;font-size:19px;letter-spacing:.16em;font-weight:600}
+.gate .head span{display:block;font-size:10.5px;letter-spacing:.22em;color:var(--ink-35);margin-top:5px}
+.gate .head p{font-size:12.5px;color:var(--ink-60);margin-top:12px}
+.gate form{padding:20px 24px 22px;display:grid;gap:14px}
+.gate .err{background:#F7E9E9;border:1px solid var(--alert);color:var(--alert);
+  font-size:12px;padding:8px 10px;border-radius:3px;display:none}
+.gate .err.on{display:block}
+.gate .demo{padding:12px 24px 20px;font-size:11px;color:var(--ink-60);border-top:1px solid var(--rule);line-height:1.7}
+.gate .demo code{font-family:"IBM Plex Mono",monospace;background:var(--paper);padding:1px 4px;border-radius:2px}
+
+/* ── shell ───────────────────────────────── */
+.shell{display:none;min-height:100vh}
+.shell.on{display:flex}
+.rail{width:200px;flex:0 0 200px;background:var(--ink);color:var(--paper-2);
+  padding:22px 0;display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.brand{padding:0 20px 20px;border-bottom:1px solid rgba(255,255,255,.14)}
+.brand b{display:block;font-size:17px;letter-spacing:.16em;font-weight:600}
+.brand span{display:block;font-size:10.5px;color:#8FA69B;letter-spacing:.22em;margin-top:5px}
+.nav{padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+.nav button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;
+  padding:9px 10px;border-radius:3px;color:#B9C6BE;font-size:13.5px}
+.nav button:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav button[aria-current="true"]{background:var(--paper);color:var(--ink);font-weight:600}
+.nav .tick{font-family:"IBM Plex Mono",monospace;font-size:10px;opacity:.55}
+.nav .count{margin-left:auto;background:var(--amber);color:#231a06;font-size:10.5px;font-weight:700;border-radius:9px;padding:1px 6px}
+.whoami{margin-top:auto;padding:14px 16px;border-top:1px solid rgba(255,255,255,.14);font-size:12px;color:#8FA69B}
+.whoami .who{color:#E6EEE9;font-weight:600;font-size:13px;margin:4px 0 7px}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+
+/* ── topbar ──────────────────────────────── */
+.topbar{display:flex;align-items:flex-end;gap:18px;padding:20px 30px 14px;
+  border-bottom:1px solid var(--rule);background:var(--paper);position:sticky;top:0;z-index:5;flex-wrap:wrap}
+.topbar h1{font-size:20px;font-weight:600;letter-spacing:-.01em}
+.topbar .sub{font-size:12px;color:var(--ink-60);margin-top:2px}
+.spacer{flex:1}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:10px;letter-spacing:.16em;color:var(--ink-35);text-transform:uppercase;font-weight:600}
+.field select,.field input{background:var(--paper-2);border:1px solid var(--rule);border-radius:3px;padding:6px 9px;font-size:13px;min-width:120px}
+.field select:focus,.field input:focus,button:focus-visible,.qcell input:focus{outline:2px solid var(--blue);outline-offset:1px}
+.view{padding:22px 30px 60px;max-width:1240px}
+
+/* ── panels ──────────────────────────────── */
+.panel{background:var(--paper-2);border:1px solid var(--rule);border-radius:4px;margin-bottom:20px}
+.panel > header{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--rule);flex-wrap:wrap}
+.panel > header h2{font-size:13px;font-weight:600}
+.panel > header .hint{font-size:11.5px;color:var(--ink-60)}
+.panel .body{padding:16px}
+.eyebrow{font-size:10px;letter-spacing:.2em;color:var(--ink-35);font-weight:600;text-transform:uppercase}
+
+/* ── 진척 게이지 ─────────────────────────── */
+.gauge{--pct:0;--exp:100;--hue:var(--deep);width:100%}
+.gauge .scale{position:relative;height:10px;background:#E3E7E1;border:1px solid var(--rule);border-radius:2px}
+.gauge .fill{position:absolute;top:0;bottom:0;left:0;width:calc(min(var(--pct),140) / 140 * 100%);
+  background:var(--hue);border-radius:1px;transition:width .5s cubic-bezier(.2,.8,.2,1)}
+.gauge .ticks{position:relative;height:12px;margin-top:2px}
+.gauge .ticks i{position:absolute;top:0;width:1px;height:4px;background:var(--ink-35)}
+.gauge .ticks i.major{height:7px;background:var(--ink);width:1.5px}
+.gauge .ticks i b{position:absolute;top:7px;left:50%;transform:translateX(-50%);white-space:nowrap;
+  font-family:"IBM Plex Mono",monospace;font-size:8.5px;color:var(--ink-35);font-weight:500}
+.gauge.lg .scale{height:15px}
+.readout{display:flex;align-items:baseline;gap:6px}
+.readout .big{font-family:"IBM Plex Mono",monospace;font-size:26px;font-weight:600;letter-spacing:-.02em}
+.readout .pc{font-size:12px;color:var(--ink-60)}
+
+/* ── cards ───────────────────────────────── */
+.grid{display:grid;gap:14px}
+.grid.c3{grid-template-columns:repeat(auto-fit,minmax(272px,1fr))}
+.card{background:var(--paper-2);border:1px solid var(--rule);border-radius:4px;padding:14px 15px 17px}
+.card.mine{border-color:var(--ink);box-shadow:inset 3px 0 0 var(--ink)}
+.card .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;gap:8px}
+.card .name{font-weight:600;font-size:14px;display:flex;align-items:center;gap:7px}
+.swatch{width:9px;height:9px;border-radius:2px;flex:0 0 9px}
+.card .meta{font-size:11px;color:var(--ink-60);margin-top:13px;display:flex;justify-content:space-between;gap:8px}
+
+/* ── tables ──────────────────────────────── */
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th,td{border-bottom:1px solid var(--rule);padding:7px 9px;text-align:left;vertical-align:middle}
+thead th{font-size:10px;letter-spacing:.12em;color:var(--ink-35);font-weight:600;text-transform:uppercase;background:var(--paper);position:sticky;top:0}
+tbody tr:hover{background:#F1F4EF}
+td.num,th.num{text-align:right;font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.scroll{overflow:auto;max-width:100%}
+
+/* ── 분기 누적 입력 칸 ────────────────────── */
+.qcell{min-width:142px;vertical-align:top}
+.qcell.now{background:#F3F6F1;box-shadow:inset 0 2px 0 var(--ink)}
+.qcell.fut{opacity:.6}
+.qcell .in{display:flex;align-items:baseline;gap:5px}
+.qcell input{width:100%;max-width:92px;background:transparent;border:1px solid transparent;border-bottom:1px solid var(--rule);
+  border-radius:2px;padding:4px;text-align:right;font-family:"IBM Plex Mono",monospace;font-size:14px}
+.qcell input:hover:not(:disabled){border-color:var(--rule);background:#fff}
+.qcell input:disabled{color:var(--ink-60);border-bottom-style:dotted;cursor:not-allowed}
+.qcell .u{font-size:10px;color:var(--ink-35)}
+.qcell .g{margin:6px 0 4px}
+.qfoot{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.qfoot .rt{font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:600}
+.warnrow{font-size:10px;color:var(--alert);margin-top:2px}
+.clip{font-size:10px;line-height:1.4;color:var(--ink-35);border:1px solid transparent;border-radius:2px;padding:1px 4px;
+  font-family:"IBM Plex Mono",monospace}
+.clip:hover{background:var(--rule);color:var(--ink)}
+.clip.has{color:var(--deep);font-weight:600}
+.clip.need{color:var(--amber);border-color:var(--amber)}
+
+/* ── 증빙 ────────────────────────────────── */
+.ev-list{display:grid;gap:8px}
+.ev-item{display:flex;gap:10px;align-items:center;border:1px solid var(--rule);border-radius:3px;padding:8px 10px;background:#fff}
+.ev-item .thumb{width:38px;height:38px;flex:0 0 38px;border-radius:2px;background:var(--paper);border:1px solid var(--rule);
+  object-fit:cover;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--ink-35);font-family:"IBM Plex Mono",monospace}
+.ev-item .nm{font-size:12.5px;font-weight:600;word-break:break-all}
+.ev-item .who{font-size:10.5px;color:var(--ink-60);margin-top:2px}
+.ev-item .acts{margin-left:auto;display:flex;gap:5px;white-space:nowrap}
+.ev-item a.open{font-size:11.5px;color:var(--blue);text-decoration:underline}
+.drop{border:1px dashed var(--rule);border-radius:3px;padding:10px;background:var(--paper)}
+
+/* ── bits ────────────────────────────────── */
+.tag{display:inline-block;font-size:10px;letter-spacing:.08em;font-weight:600;padding:2px 6px;border-radius:2px;border:1px solid currentColor;white-space:nowrap}
+.t-good{color:var(--deep)}.t-warn{color:var(--amber)}.t-bad{color:var(--alert)}.t-idle{color:var(--ink-35)}
+.btn{border:1px solid var(--ink);border-radius:3px;padding:6px 12px;font-size:12.5px;font-weight:500;background:var(--paper-2)}
+.btn:hover{background:var(--ink);color:var(--paper-2)}
+.btn.primary{background:var(--ink);color:var(--paper-2)}
+.btn.primary:hover{background:var(--deep);border-color:var(--deep)}
+.btn.ghost{border-color:var(--rule);color:var(--ink-60)}
+.btn.ghost:hover{background:var(--rule);color:var(--ink)}
+.btn.sm{padding:3px 8px;font-size:11.5px}
+.btn.wide{width:100%}
+.btn.out{border-color:#3B4A43;color:#B9C6BE;background:transparent;width:100%;padding:5px}
+.btn.out:hover{background:#26332C;color:#fff}
+.empty{padding:30px 16px;text-align:center;color:var(--ink-60);font-size:13px}
+.empty b{display:block;color:var(--ink);font-size:14px;margin-bottom:5px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--ink-60);margin-top:10px}
+.legend span{display:flex;align-items:center;gap:5px}
+.pending-note{font-size:11px;color:var(--amber);margin-top:3px}
+.lock-note{font-size:11.5px;color:var(--ink-60)}
+.diff{font-family:"IBM Plex Mono",monospace;font-size:12px}
+.diff del{color:var(--ink-35);text-decoration:line-through}
+.diff ins{color:var(--deep);text-decoration:none;font-weight:600}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:3px;overflow:hidden}
+.seg button{padding:5px 11px;font-size:12px;color:var(--ink-60);background:var(--paper-2)}
+.seg button + button{border-left:1px solid var(--rule)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper-2);font-weight:500}
+svg.chart{display:block;width:100%;height:auto}
+.toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,90px);background:var(--ink);color:var(--paper-2);
+  padding:10px 16px;border-radius:3px;font-size:13px;opacity:0;transition:.28s;z-index:50;pointer-events:none}
+.toast.on{transform:translate(-50%,0);opacity:1}
+
+/* ── modal ───────────────────────────────── */
+.mask{position:fixed;inset:0;background:rgba(19,26,23,.45);display:none;align-items:center;justify-content:center;z-index:40;padding:20px}
+.mask.on{display:flex}
+.modal{background:var(--paper-2);border-radius:5px;width:100%;max-width:460px;max-height:88vh;overflow:auto;border:1px solid var(--ink)}
+.modal header{padding:14px 18px;border-bottom:1px solid var(--rule)}
+.modal header h3{font-size:15px;font-weight:600}
+.modal header p{font-size:11.5px;color:var(--ink-60);margin-top:3px}
+.modal .body{padding:16px 18px;display:grid;gap:12px}
+.modal footer{padding:12px 18px;border-top:1px solid var(--rule);display:flex;gap:8px;justify-content:flex-end}
+.frow{display:grid;gap:5px}
+.frow label{font-size:11px;letter-spacing:.1em;color:var(--ink-35);font-weight:600;text-transform:uppercase}
+.frow input,.frow select{background:#fff;border:1px solid var(--rule);border-radius:3px;padding:7px 9px;font-size:13px;width:100%}
+.frow .help{font-size:11px;color:var(--ink-60)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+@media (max-width:820px){
+  .shell{flex-direction:column}
+  .rail{width:100%;height:auto;position:static;flex-direction:row;align-items:center;padding:10px 12px;gap:10px;overflow:auto}
+  .brand{border:none;padding:0 10px 0 4px}.brand span{display:none}
+  .nav{flex-direction:row;padding:0;flex:1}
+  .nav .tick{display:none}
+  .whoami{margin:0;border:none;padding:0;min-width:130px}
+  .view,.topbar{padding-left:16px;padding-right:16px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="gate" id="gate">
+  <div class="box">
+    <div class="head"><b>KPI</b><span>계기판 · 2026 · 연간 목표</span>
+      <p>소속을 고르고 비밀번호를 입력하면 해당 부서의 KPI만 열립니다.</p></div>
+    <form id="loginForm">
+      <div class="err" id="loginErr"></div>
+      <div class="frow"><label for="acctSel">소속</label><select id="acctSel"></select></div>
+      <div class="frow"><label for="pwInput">비밀번호</label>
+        <input id="pwInput" type="password" autocomplete="current-password" placeholder="비밀번호"></div>
+      <button class="btn primary wide" type="submit">열기</button>
+    </form>
+    <div class="demo" id="demoNote"></div>
+  </div>
+</div>
+
+<div class="shell" id="shell">
+  <aside class="rail">
+    <div class="brand"><b>KPI</b><span>계기판 · 2026</span></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="whoami">
+      <div class="eyebrow" style="color:#8FA69B">접속 중</div>
+      <div class="who" id="whoName"></div>
+      <div id="roleLine" style="margin-bottom:9px"></div>
+      <button class="btn out" id="logout">잠그고 나가기</button>
+    </div>
+  </aside>
+  <div class="main">
+    <div class="topbar">
+      <div><h1 id="viewTitle">대시보드</h1><div class="sub" id="viewSub"></div></div>
+      <div class="spacer"></div>
+      <div class="field"><label for="yearSel">연도</label><select id="yearSel"><option>2026</option></select></div>
+      <div class="field"><label for="qSel">기준 시점</label><select id="qSel"></select></div>
+    </div>
+    <div class="view" id="view"></div>
+  </div>
+</div>
+
+<div class="mask" id="mask"><div class="modal" id="modal"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ══════════════════════════════════════════
+   1. 데이터 — 연간 목표 / 분기 누적 실적
+   ══════════════════════════════════════════ */
+const Q = ['1분기 누적','상반기 누적','3분기 누적','연간 누적'];
+const Q_SHORT = ['1분기','2분기','3분기','4분기'];
+const Q_MONTHS = ['1–3월','1–6월','1–9월','1–12월'];
+const uid = p => p + '_' + Math.random().toString(36).slice(2,8);
+const q4 = (...v) => { const a = [null,null,null,null]; v.forEach((x,i)=>a[i]=x); return a; };
+
+const S = {
+  year: 2026, q: 2, view: 'dash', acct: null, cmpMode: 'prog', cmpTeam: 't1',
+  teams: [
+    { id:'t1',  name:'전략기획실',     short:'전략기획', color:'#0F5C4A' },
+    { id:'t2',  name:'경영지원실',     short:'경영지원', color:'#2F5D8C' },
+    { id:'t3',  name:'대외협력실',     short:'대외협력', color:'#6B4675' },
+    { id:'t4',  name:'미래전략연구소', short:'미래전략', color:'#B0632B' },
+    { id:'t5',  name:'정보화팀',       short:'정보화',   color:'#46803A' },
+    { id:'t6',  name:'가치성장팀',     short:'가치성장', color:'#8A3A55' },
+    { id:'t7',  name:'사회공헌센터',   short:'사회공헌', color:'#1E7A8C' },
+    { id:'t8',  name:'푸드뱅크사업단', short:'푸드뱅크', color:'#7A6224' },
+    { id:'t9',  name:'나눔사업추진단', short:'나눔사업', color:'#5B4E9E' },
+    { id:'t10', name:'지역복지사업단', short:'지역복지', color:'#A33F3F' },
+    { id:'t11', name:'자원봉사사업단', short:'자원봉사', color:'#2C6E7F' },
+    { id:'t12', name:'교육연수실',     short:'교육연수', color:'#7D5A33' },
+  ],
+  accounts: [
+    { id:'a1',  name:'전략기획실',     teamId:'t1',  role:'admin', pw:'plan2026' },
+    { id:'a2',  name:'경영지원실',     teamId:'t2',  role:'team',  pw:'support2026' },
+    { id:'a3',  name:'대외협력실',     teamId:'t3',  role:'team',  pw:'partner2026' },
+    { id:'a4',  name:'미래전략연구소', teamId:'t4',  role:'team',  pw:'future2026' },
+    { id:'a5',  name:'정보화팀',       teamId:'t5',  role:'team',  pw:'it2026' },
+    { id:'a6',  name:'가치성장팀',     teamId:'t6',  role:'team',  pw:'growth2026' },
+    { id:'a7',  name:'사회공헌센터',   teamId:'t7',  role:'team',  pw:'csr2026' },
+    { id:'a8',  name:'푸드뱅크사업단', teamId:'t8',  role:'team',  pw:'foodbank2026' },
+    { id:'a9',  name:'나눔사업추진단', teamId:'t9',  role:'team',  pw:'nanum2026' },
+    { id:'a10', name:'지역복지사업단', teamId:'t10', role:'team',  pw:'local2026' },
+    { id:'a11', name:'자원봉사사업단', teamId:'t11', role:'team',  pw:'volunteer2026' },
+    { id:'a12', name:'교육연수실',     teamId:'t12', role:'team',  pw:'edu2026' },
+  ],
+  /* target = 연간 목표
+     type  = 'cum'  누적형: 연초부터 쌓아 올린 실적을 입력 (매출·건수·인원). 기대 진도 = 경과 분기 비율
+             'rate' 비율형: 그 시점의 수준을 입력 (이행률·가동률·만족도). 기대 진도 = 100%
+     dir   = 비율형에서만 의미 (up 높을수록 좋음 / down 낮을수록 좋음) */
+  kpis: [
+    { id:'k1',  teamId:'t1',  name:'전략과제 이행률',    unit:'%',      target:90,   weight:100, type:'rate', dir:'up' },
+    { id:'k2',  teamId:'t2',  name:'예산 집행률',        unit:'%',      target:95,   weight:100, type:'cum',  dir:'up' },
+    { id:'k3',  teamId:'t3',  name:'신규 협약 체결',     unit:'건',     target:12,   weight:100, type:'cum',  dir:'up' },
+    { id:'k4',  teamId:'t4',  name:'연구보고서 발간',    unit:'편',     target:8,    weight:100, type:'cum',  dir:'up' },
+    { id:'k5',  teamId:'t5',  name:'주요 시스템 가동률', unit:'%',      target:99.5, weight:100, type:'rate', dir:'up' },
+    { id:'k6',  teamId:'t6',  name:'신규 후원 개발액',   unit:'백만원', target:600,  weight:100, type:'cum',  dir:'up' },
+    { id:'k7',  teamId:'t7',  name:'기업 협업 프로그램', unit:'건',     target:20,   weight:100, type:'cum',  dir:'up' },
+    { id:'k8',  teamId:'t8',  name:'식품 기부 취급액',   unit:'백만원', target:1200, weight:100, type:'cum',  dir:'up' },
+    { id:'k9',  teamId:'t9',  name:'나눔 캠페인 모금액', unit:'백만원', target:800,  weight:100, type:'cum',  dir:'up' },
+    { id:'k10', teamId:'t10', name:'복지 지원 세대 수',  unit:'세대',   target:1800, weight:100, type:'cum',  dir:'up' },
+    { id:'k11', teamId:'t11', name:'자원봉사 참여 인원', unit:'명',     target:4800, weight:100, type:'cum',  dir:'up' },
+    { id:'k12', teamId:'t12', name:'교육 과정 이수율',   unit:'%',      target:85,   weight:100, type:'rate', dir:'up' },
+  ],
+  // actuals[kpiId][분기] = 그 분기 말 기준 누적 실적
+  actuals: {
+    k1:  q4(88,92,86),        k2:  q4(22,47,71),       k3:  q4(4,6,9),
+    k4:  q4(2,3,5),           k5:  q4(99.7,99.4,99.8), k6:  q4(142,310,465),
+    k7:  q4(5,11,15),         k8:  q4(288,603,899),    k9:  q4(186,410,608),
+    k10: q4(462,900,1355),    k11: q4(1140,2460,3545), k12: q4(83,88,86),
+  },
+  requests: [
+    { id:'r0', kind:'update', refId:'k6', by:'a6', at:'2026-07-02', status:'pending',
+      before:{ target:600 }, after:{ target:720 }, reason:'하반기 모금 캠페인 확대에 따른 상향' },
+  ],
+  evidence: {
+    k6: { 1: [{ id:'e1', kind:'link', name:'상반기 후원 개발 누적 내역',
+                url:'https://drive.example.com/growth/2026-h1-donation', note:'약정 기준, 입금 전 포함',
+                by:'a6', at:'2026-07-03' }] },
+    k8: { 1: [{ id:'e2', kind:'link', name:'상반기 기부식품 취급 실적표',
+                url:'https://drive.example.com/foodbank/2026-h1-report', note:'환산단가 기준',
+                by:'a8', at:'2026-07-02' }] },
+  },
+};
+
+/* ══════════════════════════════════════════
+   2. 권한 · 계산
+   ══════════════════════════════════════════ */
+const acct = () => S.accounts.find(a => a.id === S.acct);
+const isAdmin = () => acct()?.role === 'admin';
+const canEdit = tid => isAdmin() || acct()?.teamId === tid;
+const myTeams = () => isAdmin() ? S.teams : S.teams.filter(t => t.id === acct().teamId);
+const team = id => S.teams.find(t => t.id === id);
+const kpi = id => S.kpis.find(k => k.id === id);
+const teamKpis = tid => S.kpis.filter(k => k.teamId === tid);
+
+/** 기대 진도(연간 목표의 %) — 누적형은 경과 분기 비율, 비율형은 100 */
+const expPct = (k, q) => k.type === 'cum' ? (q+1)/4*100 : 100;
+
+/** 진척률 — 연간 목표를 얼마나 채웠는가 (%) */
+function prog(k, q){
+  const v = S.actuals[k.id]?.[q];
+  if (v == null || !isFinite(v) || !k.target) return null;
+  if (k.type === 'rate' && k.dir === 'down') return v <= 0 ? 200 : k.target / v * 100;
+  return v / k.target * 100;
+}
+/** 진도 대비 — 이 시점에 있어야 할 자리 대비 (%) · 100이면 정상 페이스 */
+function pace(k, q){
+  const p = prog(k, q);
+  if (p == null) return null;
+  return k.type === 'cum' ? p / ((q+1)/4) : p;
+}
+const wavg = (items, fn) => {
+  const rows = items.map(k => ({ w:k.weight, r:fn(k) })).filter(x => x.r != null);
+  if (!rows.length) return null;
+  const W = rows.reduce((a,b)=>a+b.w,0) || 1;
+  return rows.reduce((a,b)=>a + b.r*b.w, 0) / W;
+};
+const teamProg = (tid, q) => wavg(teamKpis(tid), k => prog(k, q));
+const teamPace = (tid, q) => wavg(teamKpis(tid), k => pace(k, q));
+const teamExp  = (tid, q) => wavg(teamKpis(tid), k => expPct(k, q)) ?? (q+1)/4*100;
+
+const tone = r => r == null ? 'idle' : r >= 100 ? 'good' : r >= 90 ? 'warn' : 'bad';
+const toneColor = r => ({good:'var(--deep)',warn:'var(--amber)',bad:'var(--alert)',idle:'var(--ink-35)'})[tone(r)];
+const fmt = (v,d=1) => v == null ? '—' : Number(v).toLocaleString('ko-KR',{maximumFractionDigits:d});
+const pct = r => r == null ? '—' : r.toFixed(1) + '%';
+
+const pendingFor = refId => S.requests.find(r => r.status==='pending' && r.refId===refId);
+const visibleRequests = () => isAdmin() ? S.requests
+  : S.requests.filter(r => (kpi(r.refId)?.teamId || r.after?.teamId) === acct().teamId);
+const pendingCount = () => visibleRequests().filter(r => r.status==='pending').length;
+
+/* 증빙 */
+const evList = (kid, q) => (S.evidence[kid]?.[q]) || [];
+const evCount = (kid, q) => evList(kid, q).length;
+function missingEv(tid, upto){
+  const out = [];
+  teamKpis(tid).forEach(k => { for (let q=0; q<=upto; q++)
+    if (S.actuals[k.id]?.[q] != null && !evCount(k.id, q)) out.push({ k, q }); });
+  return out;
+}
+function addEvidence(kid, q, item){
+  S.evidence[kid] = S.evidence[kid] || {};
+  S.evidence[kid][q] = S.evidence[kid][q] || [];
+  S.evidence[kid][q].push({ id:uid('e'), by:S.acct, at:new Date().toISOString().slice(0,10), ...item });
+}
+const removeEvidence = (kid, q, id) => { S.evidence[kid][q] = evList(kid, q).filter(x => x.id !== id); };
+const kb = n => n == null ? '' : n < 1048576 ? Math.round(n/1024)+'KB' : (n/1048576).toFixed(1)+'MB';
+/** 누적형인데 앞 분기보다 줄어든 값 */
+function backslide(k, q){
+  if (k.type !== 'cum' || q === 0) return false;
+  const v = S.actuals[k.id]?.[q], p = S.actuals[k.id]?.[q-1];
+  return v != null && p != null && v < p;
+}
+
+/* ══════════════════════════════════════════
+   3. UI 조각
+   ══════════════════════════════════════════ */
+function gauge(p, exp, big=false){
+  const v = p == null ? 0 : Math.max(0, Math.min(p, 140));
+  const ticks = [25,50,75,100].map(t =>
+    `<i class="${t===100?'major':''}" style="left:${t/140*100}%"><b>${t===100?'연간목표':t}</b></i>`).join('');
+  return `<div class="gauge ${big?'lg':''}" style="--pct:${v};--exp:${exp};--hue:${toneColor(pToneRef(p,exp))}">
+    <div class="scale"><div class="fill"></div></div>
+    <div class="ticks">${ticks}</div></div>`;
+}
+/** 게이지 색은 기대 진도 대비로 판정 */
+const pToneRef = (p, exp) => p == null ? null : (exp ? p / exp * 100 : p);
+const tag = r => `<span class="tag t-${tone(r)}">${pct(r)}</span>`;
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('on');
+  clearTimeout(el._t); el._t = setTimeout(()=>el.classList.remove('on'), 2200);
+}
+function lineChart(labels, series, {h=210, yMin=0, yMax=140} = {}){
+  const w=760, pad={l:38,r:12,t:12,b:26}, iw=w-pad.l-pad.r, ih=h-pad.t-pad.b;
+  const x = i => pad.l + (labels.length===1 ? iw/2 : i*iw/(labels.length-1));
+  const y = v => pad.t + ih - (Math.max(yMin,Math.min(v,yMax))-yMin)/(yMax-yMin)*ih;
+  const steps = [0,25,50,75,100,125].filter(g=>g>=yMin&&g<=yMax);
+  const grid = steps.map(g=>
+    `<line x1="${pad.l}" x2="${w-pad.r}" y1="${y(g)}" y2="${y(g)}" stroke="${g===100?'#131A17':'#D3DAD2'}"
+      stroke-width="${g===100?1.2:1}" stroke-dasharray="${g===100?'':'2 3'}"/>
+     <text x="4" y="${y(g)+3.5}" font-size="9" fill="#9AA69C" font-family="IBM Plex Mono">${g}</text>`).join('');
+  const xs = labels.map((l,i)=>`<text x="${x(i)}" y="${h-8}" font-size="10" fill="#5A6560" text-anchor="middle">${l}</text>`).join('');
+  const paths = series.map(s=>{
+    const pts = s.data.map((v,i)=>({v,i})).filter(p=>p.v!=null);
+    if(!pts.length) return '';
+    const d = pts.map((p,j)=>`${j?'L':'M'}${x(p.i).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
+    const dots = pts.map(p=>`<circle cx="${x(p.i).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="3" fill="${s.color}">
+      <title>${s.name} ${labels[p.i]} · ${p.v.toFixed(1)}%</title></circle>`).join('');
+    return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>${dots}`;
+  }).join('');
+  return `<svg class="chart" viewBox="0 0 ${w} ${h}" role="img">${grid}${xs}${paths}</svg>`;
+}
+function barChart(labels, series, {h=210, yMax=140} = {}){
+  const w=760, pad={l:38,r:12,t:12,b:26}, iw=w-pad.l-pad.r, ih=h-pad.t-pad.b;
+  const gw = iw/labels.length, n = series.length, bw = Math.min(34,(gw-14)/n);
+  const y = v => pad.t + ih - Math.max(0,Math.min(v,yMax))/yMax*ih;
+  const grid = [25,50,75,100].map(g=>
+    `<line x1="${pad.l}" x2="${w-pad.r}" y1="${y(g)}" y2="${y(g)}" stroke="${g===100?'#131A17':'#D3DAD2'}"
+      stroke-width="${g===100?1.2:1}" stroke-dasharray="${g===100?'':'2 3'}"/>
+     <text x="4" y="${y(g)+3.5}" font-size="9" fill="#9AA69C" font-family="IBM Plex Mono">${g}</text>`).join('');
+  const bars = labels.map((l,i)=>{
+    const cx = pad.l + gw*i + gw/2;
+    const inner = series.map((s,j)=>{
+      const v = s.data[i]; if(v==null) return '';
+      const bx = cx - (n*bw)/2 + j*bw;
+      const fill = s.colors ? s.colors[i] : s.color;
+      return `<rect x="${bx+1}" y="${y(v)}" width="${bw-2}" height="${pad.t+ih-y(v)}" fill="${fill}" rx="1">
+        <title>${s.colors ? l : s.name+' · '+l} · ${v.toFixed(1)}%</title></rect>`;
+    }).join('');
+    return inner + `<text x="${cx}" y="${h-8}" font-size="10" fill="#5A6560" text-anchor="middle">${l}</text>`;
+  }).join('');
+  return `<svg class="chart" viewBox="0 0 ${w} ${h}" role="img">${grid}${bars}</svg>`;
+}
+const legend = series => `<div class="legend">${series.map(s=>
+  `<span><i class="swatch" style="background:${s.color};display:inline-block"></i>${s.name}</span>`).join('')}</div>`;
+
+/* ══════════════════════════════════════════
+   4. 승인 워크플로
+   ══════════════════════════════════════════ */
+const FIELD_LABEL = { name:'지표명', unit:'단위', target:'연간 목표', weight:'가중치(%)', dir:'방향', type:'유형' };
+const DIR_LABEL = { up:'높을수록 좋음', down:'낮을수록 좋음' };
+const TYPE_LABEL = { cum:'누적형', rate:'비율형' };
+const showVal = (f,v) => f==='dir' ? DIR_LABEL[v] : f==='type' ? TYPE_LABEL[v] : String(v);
+
+function submitChange(kind, refId, before, after, reason){
+  const req = { id:uid('r'), kind, refId, by:S.acct, at:new Date().toISOString().slice(0,10),
+    status:'pending', before, after, reason };
+  S.requests.unshift(req);
+  if (isAdmin()){ applyRequest(req, '전략기획실 즉시 승인'); toast('변경을 승인하고 반영했습니다.'); }
+  else toast('변경 요청을 보냈습니다. 전략기획실 승인 후 반영됩니다.');
+  render();
+}
+function applyRequest(req, note){
+  req.status='approved'; req.decidedBy=S.acct; req.note=note||'';
+  if (req.kind === 'create'){ S.kpis.push({ id:req.refId, ...req.after }); S.actuals[req.refId] = [null,null,null,null]; }
+  else Object.assign(kpi(req.refId), req.after);
+}
+function decide(id, ok){
+  if (!isAdmin()) return;
+  const r = S.requests.find(x=>x.id===id);
+  if (!r || r.status!=='pending') return;
+  if (ok){ applyRequest(r); toast('승인 완료 — 연간 목표가 반영되었습니다.'); }
+  else { r.status='rejected'; r.decidedBy=S.acct; toast('반려했습니다.'); }
+  render();
+}
+
+/* ══════════════════════════════════════════
+   5. 모달
+   ══════════════════════════════════════════ */
+function openKpiModal(obj, ctx){
+  const isNew = !obj;
+  const d = obj || { name:'', unit:'', target:'', weight:100, type:'cum', dir:'up', teamId:ctx.teamId };
+  if (!canEdit(d.teamId)) return toast('다른 부서의 KPI는 수정할 수 없습니다.');
+  const pend = !isNew && pendingFor(d.id);
+  document.getElementById('modal').innerHTML = `
+   <header><h3>${isNew ? `${team(d.teamId).name} · KPI 등록` : 'KPI 목표 변경'}</h3>
+     <p>${isAdmin() ? '전략기획실 계정 — 저장 시 즉시 승인·반영됩니다.'
+                    : '저장하면 승인 요청으로 등록되고, 전략기획실이 승인해야 반영됩니다.'}</p></header>
+   <div class="body">
+     ${pend ? `<div class="pending-note">◷ 이 지표에는 이미 승인 대기 중인 변경이 있습니다.</div>`:''}
+     <div class="frow"><label>지표명</label><input id="f_name" value="${d.name}" placeholder="예: 신규 협약 체결"></div>
+     <div class="two">
+       <div class="frow"><label>연간 목표</label><input id="f_target" type="number" step="any" value="${d.target}"></div>
+       <div class="frow"><label>단위</label><input id="f_unit" value="${d.unit}" placeholder="건 / 백만원 / %"></div>
+     </div>
+     <div class="frow"><label>지표 유형</label>
+       <select id="f_type">
+         <option value="cum" ${d.type==='cum'?'selected':''}>누적형 — 연초부터 쌓은 실적을 입력</option>
+         <option value="rate" ${d.type==='rate'?'selected':''}>비율형 — 그 시점의 수준을 입력</option>
+       </select>
+       <div class="help">누적형(매출·건수·인원)은 경과 분기만큼을 기대 진도로 잡습니다. 비율형(이행률·가동률·만족도)은 언제나 목표 수준이 기준입니다.</div>
+     </div>
+     <div class="frow" id="dirRow" style="${d.type==='cum'?'display:none':''}"><label>방향</label>
+       <select id="f_dir">
+         <option value="up" ${d.dir==='up'?'selected':''}>높을수록 좋음</option>
+         <option value="down" ${d.dir==='down'?'selected':''}>낮을수록 좋음</option></select></div>
+     <div class="frow"><label>가중치 (%)</label><input id="f_weight" type="number" min="0" max="100" value="${d.weight}">
+       <div class="help">부서 내 가중치 합이 100이 되도록 맞춰 주세요.</div></div>
+     <div class="frow"><label>변경 사유</label><input id="f_reason" placeholder="승인 검토에 필요한 배경을 적어 주세요"></div>
+   </div>
+   <footer><button class="btn ghost" id="m_cancel">취소</button>
+     <button class="btn primary" id="m_save">${isAdmin() ? '저장하고 반영' : '승인 요청 보내기'}</button></footer>`;
+  openMask();
+  document.getElementById('f_type').onchange = e =>
+    document.getElementById('dirRow').style.display = e.target.value === 'cum' ? 'none' : '';
+  document.getElementById('m_cancel').onclick = closeModal;
+  document.getElementById('m_save').onclick = () => {
+    const g = id => document.getElementById(id).value;
+    const next = { name:g('f_name').trim(), unit:g('f_unit').trim(), target:parseFloat(g('f_target')),
+      weight:parseFloat(g('f_weight')), type:g('f_type'), dir:g('f_type')==='cum' ? 'up' : g('f_dir'), teamId:d.teamId };
+    if (!next.name || !isFinite(next.target)) return toast('지표명과 연간 목표를 입력해 주세요.');
+    if (isNew) submitChange('create', uid('k'), null, next, g('f_reason'));
+    else {
+      const before={}, after={};
+      Object.keys(next).forEach(f=>{ if(String(d[f])!==String(next[f])){ before[f]=d[f]; after[f]=next[f]; }});
+      if (!Object.keys(after).length){ closeModal(); return toast('변경된 항목이 없습니다.'); }
+      submitChange('update', d.id, before, after, g('f_reason'));
+    }
+    closeModal();
+  };
+}
+
+const MAX_FILE = 8 * 1024 * 1024;
+function openEvidenceModal(kid, q){
+  const o = kpi(kid), edit = canEdit(o.teamId), items = evList(kid, q);
+  const v = S.actuals[kid]?.[q];
+  const icon = it => it.kind === 'link' ? '<span class="thumb">LINK</span>'
+    : (it.type||'').startsWith('image/') ? `<img class="thumb" src="${it.url}" alt="">`
+    : `<span class="thumb">${(it.name.split('.').pop()||'FILE').slice(0,4).toUpperCase()}</span>`;
+  document.getElementById('modal').innerHTML = `
+   <header><h3>${o.name} · ${S.year} ${Q[q]} 증빙</h3>
+     <p>${Q_MONTHS[q]} · 누적 실적 ${v==null?'미입력':fmt(v,2)+o.unit} · 진척률 ${pct(prog(o,q))} · ${team(o.teamId).name}
+        ${edit?'':' · 조회 전용'}</p></header>
+   <div class="body">
+     ${items.length ? `<div class="ev-list">${items.map(it=>`
+       <div class="ev-item">${icon(it)}
+         <div style="min-width:0"><div class="nm">${it.name}</div>
+           <div class="who">${S.accounts.find(a=>a.id===it.by)?.name || it.by} · ${it.at}
+             ${it.kind==='file'?` · ${kb(it.size)}`:''}${it.note?` · ${it.note}`:''}</div></div>
+         <div class="acts">
+           <a class="open" href="${it.url}" ${it.kind==='file'?`download="${it.name}"`:'target="_blank" rel="noopener"'}>열기</a>
+           ${edit?`<button class="btn ghost sm" data-evdel="${it.id}">삭제</button>`:''}
+         </div></div>`).join('')}</div>`
+     : `<div class="empty" style="padding:18px"><b>제출된 증빙이 없습니다</b>${
+          edit ? '파일을 올리거나 사내 자료 링크를 걸어 주세요.' : '해당 부서가 제출하면 여기에 표시됩니다.'}</div>`}
+     ${edit ? `
+     <div class="drop"><div class="frow"><label>파일 첨부</label>
+       <input id="ev_file" type="file" multiple>
+       <div class="help">누적 실적 산출 근거 · 1개당 8MB 이하</div></div></div>
+     <div class="frow"><label>또는 자료 링크</label>
+       <input id="ev_url" placeholder="https://drive... 사내 드라이브·대시보드 주소"></div>
+     <div class="frow"><label>링크 이름</label><input id="ev_name" placeholder="예: 상반기 누적 집계표"></div>
+     <div class="frow"><label>메모</label><input id="ev_note" placeholder="집계 기준·특이사항"></div>
+     <button class="btn wide" id="ev_addlink">링크 추가</button>` : ''}
+   </div>
+   <footer><button class="btn ghost" id="m_cancel">닫기</button></footer>`;
+  openMask();
+  document.getElementById('m_cancel').onclick = closeModal;
+  document.querySelectorAll('[data-evdel]').forEach(b => b.onclick = () => {
+    removeEvidence(kid, q, b.dataset.evdel); openEvidenceModal(kid, q); render(); toast('증빙을 삭제했습니다.');
+  });
+  if (!edit) return;
+  document.getElementById('ev_file').onchange = e => {
+    const files = [...e.target.files]; let done = 0;
+    files.forEach(f => {
+      if (f.size > MAX_FILE) return toast(`${f.name} — 8MB를 넘어 올릴 수 없습니다.`);
+      const rd = new FileReader();
+      rd.onload = () => {
+        addEvidence(kid, q, { kind:'file', name:f.name, size:f.size, type:f.type, url:rd.result,
+          note:document.getElementById('ev_note')?.value.trim() || '' });
+        if (++done === files.length){ openEvidenceModal(kid, q); render(); toast(`증빙 ${done}건을 제출했습니다.`); }
+      };
+      rd.readAsDataURL(f);
+    });
+  };
+  document.getElementById('ev_addlink').onclick = () => {
+    const url = document.getElementById('ev_url').value.trim();
+    const name = document.getElementById('ev_name').value.trim();
+    if (!/^https?:\/\//i.test(url)) return toast('http로 시작하는 주소를 넣어 주세요.');
+    addEvidence(kid, q, { kind:'link', name: name || url, url, note:document.getElementById('ev_note').value.trim() });
+    openEvidenceModal(kid, q); render(); toast('링크 증빙을 제출했습니다.');
+  };
+}
+
+function openPwModal(accountId){
+  const a = S.accounts.find(x=>x.id===accountId);
+  if (!isAdmin() && accountId !== S.acct) return toast('다른 소속의 비밀번호는 바꿀 수 없습니다.');
+  document.getElementById('modal').innerHTML = `
+   <header><h3>${a.name} · 비밀번호 변경</h3>
+     <p>${isAdmin() && accountId!==S.acct ? '전략기획실은 각 부서 비밀번호를 재설정할 수 있습니다.'
+        : '현재 비밀번호를 확인한 뒤 새 비밀번호로 바꿉니다.'}</p></header>
+   <div class="body">
+     ${isAdmin() && accountId!==S.acct ? '' : `<div class="frow"><label>현재 비밀번호</label><input id="p_cur" type="password"></div>`}
+     <div class="frow"><label>새 비밀번호</label><input id="p_new" type="password" placeholder="4자 이상"></div>
+     <div class="frow"><label>새 비밀번호 확인</label><input id="p_new2" type="password"></div>
+   </div>
+   <footer><button class="btn ghost" id="m_cancel">취소</button>
+     <button class="btn primary" id="m_save">비밀번호 변경</button></footer>`;
+  openMask();
+  document.getElementById('m_cancel').onclick = closeModal;
+  document.getElementById('m_save').onclick = () => {
+    const g = id => document.getElementById(id)?.value ?? null;
+    if (g('p_cur') !== null && g('p_cur') !== a.pw) return toast('현재 비밀번호가 맞지 않습니다.');
+    if (!g('p_new') || g('p_new').length < 4) return toast('새 비밀번호는 4자 이상으로 정해 주세요.');
+    if (g('p_new') !== g('p_new2')) return toast('새 비밀번호 확인이 일치하지 않습니다.');
+    a.pw = g('p_new'); closeModal(); render(); toast(`${a.name} 비밀번호를 변경했습니다.`);
+  };
+}
+const openMask = () => document.getElementById('mask').classList.add('on');
+const closeModal = () => document.getElementById('mask').classList.remove('on');
+document.getElementById('mask').onclick = e => { if (e.target.id === 'mask') closeModal(); };
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+/* ══════════════════════════════════════════
+   6. 분기 누적 실적 입력
+   ══════════════════════════════════════════ */
+function inputGrid(tid){
+  const ks = teamKpis(tid), edit = canEdit(tid);
+  if (!ks.length) return `<div class="empty"><b>등록된 KPI가 없습니다</b>먼저 연간 목표를 등록하면 입력 칸이 열립니다.</div>`;
+  return `<div class="scroll"><table>
+    <thead><tr><th style="min-width:180px">지표</th><th class="num">연간 목표</th>
+      ${Q.map((q,i)=>`<th class="num" style="${i===S.q?'color:var(--ink)':''}">${q}<div style="font-weight:400;letter-spacing:0;text-transform:none">${Q_MONTHS[i]}</div></th>`).join('')}
+    </tr></thead>
+    <tbody>${ks.map(k=>{
+      const p = pendingFor(k.id);
+      return `<tr>
+        <td><div style="font-weight:600">${k.name}</div>
+          <div style="font-size:10.5px;color:var(--ink-60)">${k.unit} · ${TYPE_LABEL[k.type]}${
+            k.type==='rate'?` · ${DIR_LABEL[k.dir]}`:''} · 가중 ${k.weight}%</div>
+          ${p?`<div class="pending-note">◷ 목표 변경 승인 대기</div>`:''}</td>
+        <td class="num">${fmt(k.target,2)}</td>
+        ${Q.map((_,q)=>{
+          const v = S.actuals[k.id]?.[q], pr = prog(k,q), pa = pace(k,q), n = evCount(k.id, q);
+          const cls = n ? 'has' : (v != null ? 'need' : '');
+          return `<td class="qcell ${q===S.q?'now':''} ${q>S.q?'fut':''}">
+            <div class="in"><input type="number" step="any" value="${v ?? ''}" placeholder="—" ${edit?'':'disabled'}
+              data-id="${k.id}" data-q="${q}" aria-label="${k.name} ${Q[q]} 실적"><span class="u">${k.unit}</span></div>
+            ${backslide(k,q)?`<div class="warnrow">◬ 앞 분기보다 작습니다 — 누적값인지 확인하세요</div>`:''}
+            <div class="g">${gauge(pr, expPct(k,q))}</div>
+            <div class="qfoot">
+              <button class="clip ${cls}" data-ev="${k.id}" data-evq="${q}"
+                title="${k.name} ${Q[q]} 증빙 ${n}건${!n && v!=null ? ' — 미제출':''}">📎${n || (v!=null?' 미제출':'')}</button>
+              <span class="rt" style="color:${toneColor(pa)}" title="진척률 ${pct(pr)} · 진도 대비 ${pct(pa)}">${pr==null?'—':pr.toFixed(1)+'%'}</span>
+            </div></td>`;
+        }).join('')}
+      </tr>`;
+    }).join('')}</tbody></table></div>`;
+}
+document.addEventListener('input', e => {
+  const el = e.target;
+  if (!el.matches('.qcell input')) return;
+  const k = kpi(el.dataset.id);
+  if (!canEdit(k.teamId)) return;
+  const q = +el.dataset.q, raw = el.value.trim();
+  S.actuals[k.id][q] = raw === '' ? null : parseFloat(raw);
+  const pr = prog(k,q), pa = pace(k,q), cell = el.closest('.qcell');
+  const badge = cell.querySelector('.rt');
+  badge.textContent = pr == null ? '—' : pr.toFixed(1) + '%';
+  badge.style.color = toneColor(pa);
+  const g = cell.querySelector('.gauge');
+  g.style.setProperty('--pct', pr == null ? 0 : Math.max(0, Math.min(pr,140)));
+  g.style.setProperty('--hue', toneColor(pa));
+  clearTimeout(window._rt);
+  window._rt = setTimeout(()=>{
+    const a = document.activeElement;
+    const f = a?.dataset?.id ? { id:a.dataset.id, q:a.dataset.q, s:a.selectionStart } : null;
+    render();
+    if (f){ const back = document.querySelector(`.qcell input[data-id="${f.id}"][data-q="${f.q}"]`);
+      if (back){ back.focus(); try{ back.setSelectionRange(f.s,f.s);}catch(_){} } }
+  }, 700);
+});
+
+/* ══════════════════════════════════════════
+   7. 화면
+   ══════════════════════════════════════════ */
+const VIEWS = {
+  dash:     { t:'대시보드',  s:()=>`${S.year}년 ${Q[S.q]} 기준 · 연간 목표 진척` },
+  team:     { t:'부서 KPI',  s:()=>'연간 목표 설정(승인 필요) · 분기 누적 실적 입력 · 증빙 제출' },
+  compare:  { t:'비교 분석', s:()=>'부서별 진척률 · 진도 대비 비교' },
+  approval: { t:'승인함',    s:()=>isAdmin() ? '전 부서 목표 변경 요청 검토' : '우리 부서 요청 상태 확인' },
+  settings: { t:'설정',      s:()=>'소속별 비밀번호 관리' },
+};
+const PAL = ['#0F5C4A','#2F5D8C','#6B4675','#C98418','#A83A3A','#1E7A8C'];
+
+function viewDash(){
+  const view = myTeams();
+  const cards = view.map(t=>{
+    const pr = teamProg(t.id, S.q), pa = teamPace(t.id, S.q), ex = teamExp(t.id, S.q);
+    const mine = acct().teamId === t.id;
+    return `<div class="card ${mine?'mine':''}">
+      <div class="top"><div class="name"><i class="swatch" style="background:${t.color}"></i>${t.name}
+        ${mine?'<span class="tag t-idle">우리 부서</span>':''}</div>${tag(pa)}</div>
+      <div class="readout"><span class="big" style="color:${toneColor(pa)}">${pr==null?'—':pr.toFixed(1)}</span>
+        <span class="pc">% · 연간 목표 진척</span></div>
+      <div style="margin-top:9px">${gauge(pr, ex, true)}</div>
+      <div class="meta"><span>KPI ${teamKpis(t.id).length}개</span>
+        <span>기대 진도 ${ex.toFixed(0)}% · 진도 대비 ${pct(pa)}</span></div></div>`;
+  }).join('');
+
+  const charts = isAdmin() ? (()=>{
+    const labels = view.map(t=>t.short), colors = view.map(t=>t.color);
+    const progBar = [{ name:'진척률', colors, data: view.map(t=>teamProg(t.id, S.q)) }];
+    const paceBar = [{ name:'진도 대비', colors, data: view.map(t=>teamPace(t.id, S.q)) }];
+    return `
+    <div class="panel"><header><h2>부서별 연간 목표 진척률 — ${Q[S.q]}</h2>
+      <span class="hint">실선 100%가 연간 목표</span></header>
+      <div class="body">${barChart(labels, progBar, {h:240})}</div></div>
+    <div class="panel"><header><h2>부서별 진도 대비 — ${Q[S.q]}</h2>
+      <span class="hint">100%면 계획대로 · 100 미만이면 지연</span></header>
+      <div class="body">${barChart(labels, paceBar, {h:240})}</div></div>`;
+  })() : (()=>{
+    const ks = teamKpis(acct().teamId);
+    if (!ks.length) return `<div class="panel"><div class="empty">등록된 지표가 없습니다.</div></div>`;
+    const ser = ks.map((k,i)=>({ name:k.name, color:PAL[i%PAL.length], data: Q.map((_,q)=>prog(k,q)) }));
+    return `
+    <div class="panel"><header><h2>지표별 진척 흐름</h2>
+      <span class="hint">실선 100%가 연간 목표</span></header>
+      <div class="body">${lineChart(Q_SHORT, ser)}${legend(ser)}</div></div>`;
+  })();
+
+  const scope = isAdmin() ? S.kpis : teamKpis(acct().teamId);
+  const attn = scope.map(k=>({k, pr:prog(k,S.q), pa:pace(k,S.q)}))
+    .filter(x=>x.pa!=null && x.pa<100).sort((a,b)=>a.pa-b.pa).slice(0,6);
+  const miss = view.flatMap(t => missingEv(t.id, S.q).map(x=>({...x, t})));
+
+  return `
+  <div class="grid c3" style="margin-bottom:20px">${cards}</div>
+  ${charts}
+  <div class="panel"><header><h2>진도 미달 지표</h2>
+    <span class="hint">${isAdmin()?'전 부서':'우리 부서'} · 기대 진도에 못 미치는 순</span></header>
+    <div class="body" style="padding:0">
+      ${attn.length ? `<table><thead><tr><th>지표</th><th>부서</th><th style="width:38%">연간 목표 진척</th>
+        <th class="num">진척률</th><th class="num">진도 대비</th></tr></thead>
+      <tbody>${attn.map(({k,pr,pa})=>`<tr><td style="font-weight:600">${k.name}</td>
+        <td><span class="swatch" style="background:${team(k.teamId).color};display:inline-block;margin-right:5px"></span>${team(k.teamId).name}</td>
+        <td style="padding-right:26px">${gauge(pr, expPct(k,S.q))}</td>
+        <td class="num">${pct(pr)}</td>
+        <td class="num" style="color:${toneColor(pa)};font-weight:600">${pct(pa)}</td></tr>`).join('')}</tbody></table>`
+      : `<div class="empty"><b>지연된 지표가 없습니다</b>모든 KPI가 기대 진도 이상입니다.</div>`}
+    </div>
+    ${miss.length ? `<div style="padding:12px 16px;border-top:1px solid var(--rule);font-size:11.5px;color:var(--amber)">
+      ◷ 증빙 미제출 ${miss.length}건 — ${miss.slice(0,5).map(x=>`${x.k.name} ${Q_SHORT[x.q]}`).join(' · ')}${miss.length>5?` 외 ${miss.length-5}건`:''}
+    </div>`:''}
+  </div>`;
+}
+
+function viewTeam(){
+  const tid = S.cmpTeam, ks = teamKpis(tid), edit = canEdit(tid);
+  const wSum = ks.reduce((a,b)=>a+b.weight,0);
+  const pr = teamProg(tid, S.q), pa = teamPace(tid, S.q), ex = teamExp(tid, S.q);
+  const miss = missingEv(tid, S.q);
+  const rows = ks.map(k=>({ k, v:S.actuals[k.id]?.[S.q], n:evCount(k.id, S.q) }));
+  return `
+  <div class="panel"><header>
+      <h2>${team(tid).name} · 연간 목표</h2>
+      <span class="hint">가중치 합계 ${wSum}%${wSum!==100?' — 100%로 맞춰 주세요':''}</span>
+      <div class="spacer"></div>
+      ${edit ? `<button class="btn primary sm" id="addKpi">KPI 등록</button>` : `<span class="lock-note">조회 전용</span>`}
+    </header>
+    <div class="body" style="padding:0">
+      <div class="scroll"><table>
+        <thead><tr><th>지표</th><th class="num">연간 목표</th><th class="num">${Q[S.q]}</th>
+          <th style="width:28%">연간 목표 진척</th><th class="num">진척률</th><th class="num">진도 대비</th><th class="num">가중</th><th></th></tr></thead>
+        <tbody>${ks.map(k=>{
+          const p = pendingFor(k.id), kp = prog(k,S.q), ka = pace(k,S.q);
+          return `<tr>
+            <td><div style="font-weight:600">${k.name}</div>
+              <div style="font-size:10.5px;color:var(--ink-60)">${TYPE_LABEL[k.type]}${k.type==='rate'?` · ${DIR_LABEL[k.dir]}`:''}</div>
+              ${p?`<div class="pending-note">◷ ${fmt(p.before.target ?? k.target,2)} → ${fmt(p.after.target ?? k.target,2)} 승인 대기</div>`:''}</td>
+            <td class="num">${fmt(k.target,2)} <span style="color:var(--ink-35)">${k.unit}</span></td>
+            <td class="num">${fmt(S.actuals[k.id][S.q],2)}</td>
+            <td style="padding-right:26px">${gauge(kp, expPct(k,S.q))}</td>
+            <td class="num">${pct(kp)}</td>
+            <td class="num" style="color:${toneColor(ka)};font-weight:600">${pct(ka)}</td>
+            <td class="num">${k.weight}%</td>
+            <td style="text-align:right">${edit?`<button class="btn ghost sm" data-edit="${k.id}">목표 변경</button>`:''}</td>
+          </tr>`;}).join('')}</tbody></table></div>
+      ${ks.length? '' : `<div class="empty"><b>등록된 KPI가 없습니다</b>${edit?'‘KPI 등록’으로 연간 목표를 설정하세요.':''}</div>`}
+    </div>
+    <div style="padding:12px 16px;border-top:1px solid var(--rule);display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <span class="eyebrow">부서 종합 · ${Q[S.q]}</span>
+      <strong class="mono" style="font-size:18px;color:${toneColor(pa)}">${pct(pr)}</strong>
+      <span style="font-size:11.5px;color:var(--ink-60)">연간 목표 진척 · 기대 진도 ${ex.toFixed(0)}% · 진도 대비 ${pct(pa)}</span>
+    </div></div>
+
+  <div class="panel"><header><h2>분기 누적 실적 입력</h2>
+    <span class="hint">${edit ? '각 칸에는 연초부터 그 분기 말까지 쌓인 누적값을 넣습니다 · 📎 로 증빙 제출'
+                              : '조회 전용 · 📎 로 제출된 증빙을 볼 수 있습니다'}</span></header>
+    <div class="body" style="padding:0">${inputGrid(tid)}</div></div>
+
+  <div class="panel"><header><h2>증빙 제출 현황 — ${Q[S.q]}</h2>
+    <span class="hint">${miss.length ? `${Q[S.q]}까지 ${miss.length}건 미제출` : '기준 시점까지 전 항목 제출 완료'}</span></header>
+    <div class="body" style="padding:0">
+    ${rows.length ? `<table><thead><tr><th>지표</th><th class="num">누적 실적</th><th>증빙</th><th>상태</th><th></th></tr></thead>
+      <tbody>${rows.map(({k,v,n})=>`<tr>
+        <td style="font-weight:600">${k.name}</td>
+        <td class="num">${fmt(v,2)} <span style="color:var(--ink-35)">${k.unit}</span></td>
+        <td>${n ? evList(k.id,S.q).map(it=>`<div style="font-size:11.5px">📎 ${it.name}</div>`).join('') : '<span style="color:var(--ink-35)">—</span>'}</td>
+        <td>${v==null ? '<span class="tag t-idle">실적 미입력</span>'
+              : n ? `<span class="tag t-good">제출 ${n}건</span>` : '<span class="tag t-warn">증빙 미제출</span>'}</td>
+        <td style="text-align:right"><button class="btn ghost sm" data-ev="${k.id}" data-evq="${S.q}">
+          ${edit ? '증빙 제출' : '증빙 보기'}</button></td></tr>`).join('')}
+      </tbody></table>` : `<div class="empty">등록된 지표가 없습니다.</div>`}
+    </div>
+    ${miss.length ? `<div style="padding:12px 16px;border-top:1px solid var(--rule);font-size:11.5px;color:var(--amber)">
+      ◷ 증빙이 빠진 실적: ${miss.slice(0,6).map(x=>`${x.k.name} ${Q_SHORT[x.q]}`).join(' · ')}${miss.length>6?` 외 ${miss.length-6}건`:''}
+    </div>` : ''}
+  </div>`;
+}
+
+function viewCompare(){
+  const isProg = S.cmpMode === 'prog';
+  const mode = isProg ? '진척률' : '진도 대비';
+  const view = myTeams();
+  const fnT = (tid,q) => isProg ? teamProg(tid,q) : teamPace(tid,q);
+  const fnK = (k,q)   => isProg ? prog(k,q)       : pace(k,q);
+  const tid = S.cmpTeam, ks = teamKpis(tid);
+  const rank = view.map(t=>({t, pr:teamProg(t.id,S.q), pa:teamPace(t.id,S.q), ex:teamExp(t.id,S.q)}))
+    .sort((a,b)=>(b.pa??-1)-(a.pa??-1));
+  const kSeries = ks.map((k,i)=>({ name:k.name, color:PAL[i%PAL.length], data: Q.map((_,q)=>fnK(k,q)) }));
+
+  return `
+  <div class="panel"><header><h2>비교 기준</h2>
+    <div class="seg" style="margin-left:6px">
+      <button data-mode="prog" aria-pressed="${isProg}">진척률</button>
+      <button data-mode="pace" aria-pressed="${!isProg}">진도 대비</button></div>
+    <span class="hint">${isProg ? '연간 목표를 얼마나 채웠는가' : '이 시점 기대 진도 대비 어디쯤인가 (100% = 계획대로)'}</span>
+    ${isAdmin() ? `<div class="field" style="margin-left:12px"><label for="cmpTeamSel">지표 상세를 볼 부서</label>
+      <select id="cmpTeamSel">${view.map(t=>`<option value="${t.id}" ${t.id===tid?'selected':''}>${t.name}</option>`).join('')}</select></div>`
+      : `<div class="spacer"></div><span class="hint">${team(tid).name} 자료만 표시됩니다</span>`}
+  </header></div>
+
+  ${isAdmin() ? (()=>{
+    const QPAL = ['#C2CBC4','#8AA396','#40745F','#0F5C4A'];
+    const deptSeries = Q_SHORT.map((q,i)=>({ name:q, color:QPAL[i], data: view.map(t=>fnT(t.id, i)) }));
+    return `
+    <div class="panel"><header><h2>부서 비교 — 분기별 ${mode}</h2>
+      <span class="hint">${isProg ? '누적 실적이라 분기가 갈수록 올라갑니다' : '분기마다 계획 대비 어디였는지'}</span></header>
+      <div class="body">${barChart(view.map(t=>t.short), deptSeries, {h:250})}${legend(deptSeries)}</div></div>`;
+  })() : `
+  <div class="panel"><header><h2>${team(tid).name} 부서 종합 — ${mode}</h2></header>
+    <div class="body">${lineChart(Q_SHORT, [{ name:'부서 종합', color:team(tid).color, data: Q.map((_,q)=>fnT(tid,q)) }])}</div></div>`}
+
+  <div class="panel"><header><h2>${team(tid).name} · 지표별 ${mode}</h2></header>
+    <div class="body">${kSeries.length ? lineChart(Q_SHORT, kSeries) + legend(kSeries)
+      : `<div class="empty">등록된 지표가 없습니다.</div>`}</div></div>
+
+  <div class="panel"><header><h2>${isAdmin()?'부서 순위':'우리 부서 현황'} — ${Q[S.q]}</h2>
+    <span class="hint">진도 대비 높은 순</span></header>
+    <div class="body" style="padding:0"><table>
+      <thead><tr>${isAdmin()?'<th class="num" style="width:34px">#</th>':''}<th>부서</th>
+        <th style="width:40%">연간 목표 진척</th><th class="num">진척률</th><th class="num">진도 대비</th></tr></thead>
+      <tbody>${rank.map((x,i)=>`<tr>${isAdmin()?`<td class="num" style="color:var(--ink-35)">${i+1}</td>`:''}
+        <td><span class="swatch" style="background:${x.t.color};display:inline-block;margin-right:6px"></span>${x.t.name}</td>
+        <td style="padding-right:26px">${gauge(x.pr, x.ex)}</td>
+        <td class="num">${pct(x.pr)}</td>
+        <td class="num" style="color:${toneColor(x.pa)};font-weight:600">${pct(x.pa)}</td></tr>`).join('')}
+    </tbody></table></div></div>`;
+}
+
+function viewApproval(){
+  const rows = visibleRequests();
+  const label = r => { const k = kpi(r.refId);
+    const tName = team(r.after?.teamId || k?.teamId)?.name || '';
+    return `${k ? k.name : (r.after?.name||'신규 지표')} <span style="color:var(--ink-60);font-weight:400">· ${tName}</span>`; };
+  const diff = r => r.kind === 'create'
+    ? `<span class="diff"><ins>신규 등록</ins> · 연간 목표 ${fmt(r.after.target,2)}${r.after.unit} · 가중 ${r.after.weight}%</span>`
+    : Object.keys(r.after).map(f=>`<span class="diff">${FIELD_LABEL[f]||f}: <del>${showVal(f,r.before[f])}</del> → <ins>${showVal(f,r.after[f])}</ins></span>`).join('<br>');
+  return `<div class="panel">
+    <header><h2>목표 변경 승인함</h2>
+      <span class="hint">${isAdmin() ? '승인하면 그 즉시 연간 목표와 진척률에 반영됩니다.'
+        : '승인 권한은 전략기획실에 있습니다. 요청 상태만 확인할 수 있습니다.'}</span></header>
+    <div class="body" style="padding:0">
+      ${rows.length ? `<div class="scroll"><table>
+        <thead><tr><th>지표</th><th>변경 내용</th><th>사유</th><th>요청 · 일자</th><th>상태</th><th></th></tr></thead>
+        <tbody>${rows.map(r=>`<tr>
+          <td style="font-weight:600">${label(r)}</td>
+          <td>${diff(r)}</td>
+          <td style="color:var(--ink-60)">${r.reason || '—'}</td>
+          <td>${S.accounts.find(a=>a.id===r.by)?.name || r.by}<div style="font-size:10.5px;color:var(--ink-60)">${r.at}</div></td>
+          <td><span class="tag ${r.status==='pending'?'t-warn':r.status==='approved'?'t-good':'t-bad'}">
+            ${{pending:'승인 대기',approved:'승인됨',rejected:'반려됨'}[r.status]}</span>
+            ${r.note?`<div style="font-size:10.5px;color:var(--ink-60);margin-top:3px">${r.note}</div>`:''}</td>
+          <td style="text-align:right;white-space:nowrap">
+            ${r.status==='pending' && isAdmin()
+              ? `<button class="btn sm primary" data-ok="${r.id}">승인</button>
+                 <button class="btn sm ghost" data-no="${r.id}">반려</button>` : ''}</td></tr>`).join('')}
+        </tbody></table></div>`
+      : `<div class="empty"><b>요청이 없습니다</b>연간 목표를 바꾸면 이곳에 검토 항목이 쌓입니다.</div>`}
+    </div></div>`;
+}
+
+function viewSettings(){
+  const list = isAdmin() ? S.accounts : S.accounts.filter(a=>a.id===S.acct);
+  return `<div class="panel">
+    <header><h2>소속별 비밀번호</h2>
+      <span class="hint">${isAdmin() ? '전략기획실은 모든 소속의 비밀번호를 재설정할 수 있습니다.' : '우리 부서 비밀번호만 바꿀 수 있습니다.'}</span></header>
+    <div class="body" style="padding:0"><div class="scroll"><table>
+      <thead><tr><th>소속</th><th>권한</th><th>비밀번호</th><th></th></tr></thead>
+      <tbody>${list.map(a=>`<tr>
+        <td style="font-weight:600">${a.name}${a.id===S.acct?' <span class="tag t-idle">접속 중</span>':''}</td>
+        <td>${a.role==='admin' ? '전체 편집 · 승인' : `${team(a.teamId).name} KPI 편집 · 실적·증빙 제출`}</td>
+        <td class="mono" style="letter-spacing:.2em">••••••••</td>
+        <td style="text-align:right"><button class="btn ghost sm" data-pw="${a.id}">비밀번호 변경</button></td>
+      </tr>`).join('')}</tbody></table></div></div>
+    <div style="padding:12px 16px;border-top:1px solid var(--rule);font-size:11.5px;color:var(--ink-60)">
+      비밀번호는 이 페이지 안에서만 확인합니다. 사내에서 실제로 운영하려면 서버 인증을 붙여야 합니다.
+    </div></div>
+
+    <div class="panel"><header><h2>계산 기준</h2></header>
+      <div class="body" style="padding:0"><table>
+        <thead><tr><th>용어</th><th>뜻</th><th>계산</th></tr></thead>
+        <tbody>
+          <tr><td style="font-weight:600">진척률</td><td>연간 목표를 얼마나 채웠는가</td><td class="mono">누적 실적 ÷ 연간 목표</td></tr>
+          <tr><td style="font-weight:600">기대 진도</td><td>이 시점에 있어야 할 자리</td><td class="mono">누적형 = 경과 분기 ÷ 4 · 비율형 = 100%</td></tr>
+          <tr><td style="font-weight:600">진도 대비</td><td>계획 대비 빠른지 늦은지</td><td class="mono">진척률 ÷ 기대 진도</td></tr>
+          <tr><td style="font-weight:600">부서 종합</td><td>부서 전체 성적</td><td class="mono">지표별 값의 가중 평균</td></tr>
+        </tbody></table></div>
+      <div style="padding:12px 16px;border-top:1px solid var(--rule);font-size:11.5px;color:var(--ink-60)">
+        색은 진도 대비로 판정합니다. 100% 이상 초록 · 90% 이상 주황 · 그 아래 빨강.
+      </div></div>
+
+    <div class="panel"><header><h2>권한 요약</h2></header>
+      <div class="body" style="padding:0"><table>
+        <thead><tr><th>동작</th><th>전략기획실</th><th>각 부서</th></tr></thead>
+        <tbody>
+          <tr><td>연간 목표 등록 · 변경</td><td>전 부서 · 즉시 반영</td><td>우리 부서만 · 승인 요청</td></tr>
+          <tr><td>분기 누적 실적 입력</td><td>전 부서</td><td>우리 부서만</td></tr>
+          <tr><td>실적 증빙 제출 · 삭제</td><td>전 부서</td><td>우리 부서만</td></tr>
+          <tr><td>변경 요청 승인 · 반려</td><td>가능</td><td>불가 (상태 조회만)</td></tr>
+          <tr><td>대시보드 · 비교 분석 조회</td><td>전 부서</td><td>우리 부서만 (타 부서 비공개)</td></tr>
+          <tr><td>비밀번호 변경</td><td>전 소속</td><td>우리 부서만</td></tr>
+        </tbody></table></div></div>`;
+}
+
+/* ══════════════════════════════════════════
+   8. 렌더 · 로그인
+   ══════════════════════════════════════════ */
+function render(){
+  if (!S.acct) return;
+  if (!myTeams().some(t=>t.id===S.cmpTeam)) S.cmpTeam = myTeams()[0].id;
+  const items = [['dash','01'],['team','02'],['compare','03'],['approval','04'],['settings','05']];
+  document.getElementById('nav').innerHTML = items.map(([k,n])=>
+    `<button data-view="${k}" aria-current="${S.view===k}"><span class="tick">${n}</span>${VIEWS[k].t}
+      ${k==='approval' && pendingCount() ? `<span class="count">${pendingCount()}</span>`:''}</button>`).join('');
+  document.getElementById('viewTitle').textContent = VIEWS[S.view].t;
+  document.getElementById('viewSub').textContent = VIEWS[S.view].s();
+  document.getElementById('whoName').textContent = acct().name;
+  document.getElementById('roleLine').innerHTML =
+    `<span class="tag" style="color:${isAdmin()?'#7FD6A8':'#8FA69B'}">${isAdmin()?'전체 권한':'우리 부서 권한'}</span>`;
+
+  const bar = document.querySelector('.topbar');
+  bar.querySelector('#teamField')?.remove();
+  if (S.view === 'team'){
+    const f = document.createElement('div');
+    f.className='field'; f.id='teamField';
+    f.innerHTML = `<label for="teamSel">부서</label><select id="teamSel" ${myTeams().length===1?'disabled':''}>${
+      myTeams().map(t=>`<option value="${t.id}" ${t.id===S.cmpTeam?'selected':''}>${t.name}</option>`).join('')}</select>`;
+    bar.insertBefore(f, bar.querySelector('.field'));
+    f.querySelector('select').onchange = e => { S.cmpTeam = e.target.value; render(); };
+  }
+  document.getElementById('view').innerHTML =
+    ({dash:viewDash, team:viewTeam, compare:viewCompare, approval:viewApproval, settings:viewSettings})[S.view]();
+  bind();
+}
+function bind(){
+  document.querySelectorAll('#nav button').forEach(b => b.onclick = () => { S.view = b.dataset.view; render(); });
+  const el = id => document.getElementById(id);
+  el('addKpi')     && (el('addKpi').onclick     = () => openKpiModal(null, { teamId:S.cmpTeam }));
+  el('cmpTeamSel') && (el('cmpTeamSel').onchange= e => { S.cmpTeam = e.target.value; render(); });
+  document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { S.cmpMode = b.dataset.mode; render(); });
+  document.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => openKpiModal(kpi(b.dataset.edit)));
+  document.querySelectorAll('[data-pw]').forEach(b => b.onclick = () => openPwModal(b.dataset.pw));
+  document.querySelectorAll('[data-ev]').forEach(b => b.onclick = () => openEvidenceModal(b.dataset.ev, +b.dataset.evq));
+  document.querySelectorAll('[data-ok]').forEach(b => b.onclick = () => decide(b.dataset.ok, true));
+  document.querySelectorAll('[data-no]').forEach(b => b.onclick = () => decide(b.dataset.no, false));
+}
+
+document.getElementById('acctSel').innerHTML = S.accounts.map(a=>
+  `<option value="${a.id}">${a.name}${a.role==='admin'?' (관리자)':''}</option>`).join('');
+document.getElementById('demoNote').innerHTML =
+  `초기 비밀번호 — ${S.accounts.map(a=>`${a.name} <code>${a.pw}</code>`).join(' · ')}<br>접속 후 <b>설정</b>에서 바꿀 수 있습니다.`;
+document.getElementById('loginForm').onsubmit = e => {
+  e.preventDefault();
+  const a = S.accounts.find(x=>x.id===document.getElementById('acctSel').value);
+  const pw = document.getElementById('pwInput').value;
+  const err = document.getElementById('loginErr');
+  if (!a || pw !== a.pw){
+    err.textContent = '비밀번호가 맞지 않습니다. 소속과 비밀번호를 다시 확인해 주세요.';
+    err.classList.add('on'); document.getElementById('pwInput').select(); return;
+  }
+  err.classList.remove('on');
+  document.getElementById('pwInput').value = '';
+  S.acct = a.id; S.view = 'dash'; S.cmpTeam = a.teamId;
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('shell').classList.add('on');
+  render();
+};
+document.getElementById('logout').onclick = () => {
+  S.acct = null;
+  document.getElementById('shell').classList.remove('on');
+  document.getElementById('gate').style.display = 'flex';
+  document.getElementById('pwInput').focus();
+};
+document.getElementById('qSel').innerHTML = Q.map((q,i)=>
+  `<option value="${i}" ${i===S.q?'selected':''}>${q} (${Q_MONTHS[i]})</option>`).join('');
+document.getElementById('qSel').onchange = e => { S.q = +e.target.value; render(); };
+</script>
+</body>
+</html>
